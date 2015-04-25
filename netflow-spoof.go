@@ -3,6 +3,9 @@ package main
 import (
 	"fmt"
 	"net"
+	"log"
+	"bytes"
+	"encoding/gob"
 	"code.google.com/p/gopacket/layers"
 	"code.google.com/p/gopacket"
 )
@@ -23,42 +26,87 @@ func construct_udp() *layers.UDP {
 }
 
 type NFLOW_v5_header struct {
-	version			int16
-	count			int16
-	sys_uptime		int32
-	unix_secs		int32
-	unix_nsecs		int32
-	flow_sequence		int32
-	engine_type		int8 
-	engine_id		int8 
-	sampling_interval	int16 
+	Version			int16
+	Count			int16
+	Sys_uptime		int32
+	Unix_secs		int32
+	Unix_nsecs		int32
+	Flow_sequence		int32
+	Engine_type		int8 
+	Engine_id		int8 
+	Sampling_interval	int16 
 }
 
 type NFLOW_v5_body struct {
-	srcaddr		int32
-	dstaddr		int32
-	nexthop		int32
-	input		int16
-	output		int16
-	dPkts		int32
-	dOctets		int32
-	first		int32
-	last		int32
-	srcport		int16
-	dstport		int16
-	pad1		int8
-	tcp_flags	int8
-	prot		int8
-	tos		int8
-	src_as  	int16
-	dst_as  	int16
-	src_mask 	int8 
-	dst_mask	int8
-	pad2		int16
+	Srcaddr		int32
+	Dstaddr		int32
+	Nexthop		int32
+	Input		int16
+	Output		int16
+	DPkts		int32
+	DOctets		int32
+	First		int32
+	Last		int32
+	Srcport		int16
+	Dstport		int16
+	Pad1		int8
+	Tcp_flags	int8
+	Prot		int8
+	Tos		int8
+	Src_as  	int16
+	Dst_as  	int16
+	Src_mask 	int8 
+	Dst_mask	int8
+	Pad2		int16
 }
 
-func construct_nflow_v5() {
+func construct_payload() gopacket.Payload {
 
+	header := NFLOW_v5_header{
+		Version:		0,
+		Count:			0,
+		Sys_uptime:		0,
+		Unix_secs:		0,
+		Unix_nsecs:		0,
+		Flow_sequence:		0,
+		Engine_type:		0,
+		Engine_id:		0,
+		Sampling_interval:	0,
+	}
+	body := NFLOW_v5_body {
+		Srcaddr:		0,
+		Dstaddr:		0,
+		Nexthop:		0,
+		Input:			0,
+		Output:			0,
+		DPkts:			0,
+		DOctets:		0,
+		First:			0,
+		Last:			0,
+		Srcport:		0,
+		Dstport:		0,
+		Pad1:			0,	
+		Tcp_flags:		0,
+		Prot:			0,
+		Tos:			0,
+		Src_as:			0,
+		Dst_as:			0,
+		Src_mask:		0,
+		Dst_mask:		0,
+	}
+	encBufHeader := new(bytes.Buffer)
+	err := gob.NewEncoder(encBufHeader).Encode(header)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	encBufBody := new(bytes.Buffer)
+	err = gob.NewEncoder(encBufBody).Encode(body)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return gopacket.Payload(append(encBufHeader.Bytes(), encBufBody.Bytes()...))
 }
 
 func main() {
@@ -69,14 +117,15 @@ func main() {
 	l2 := construct_ethernet()
 	l3 := construct_ip("1.2.3.4", "5.6.7.8")
 	l4 := construct_udp()
-
+	payload := construct_payload()
 
 	//LayerCake
 	gopacket.SerializeLayers(buf, opts,
 		l2, 
 		l3,
 		l4,
-		gopacket.Payload([]byte{9, 10, 11, 12}))
+		payload)
+//		gopacket.Payload([]byte{9, 10, 11, 12}))
 	packetData := buf.Bytes()
         fmt.Println(packetData)
 }
