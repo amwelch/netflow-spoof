@@ -3,9 +3,6 @@ package main
 import (
 	"fmt"
 	"net"
-	"log"
-	"bytes"
-	"encoding/gob"
 	"code.google.com/p/gopacket/layers"
 	"code.google.com/p/gopacket"
 )
@@ -26,38 +23,38 @@ func construct_udp() *layers.UDP {
 }
 
 type NFLOW_v5_header struct {
-	Version			int16
-	Count			int16
-	Sys_uptime		int32
-	Unix_secs		int32
-	Unix_nsecs		int32
-	Flow_sequence		int32
-	Engine_type		int8 
-	Engine_id		int8 
-	Sampling_interval	int16 
+	Version			uint16
+	Count			uint16
+	Sys_uptime		uint32
+	Unix_secs		uint32
+	Unix_nsecs		uint32
+	Flow_sequence		uint32
+	Engine_type		uint8 
+	Engine_id		uint8 
+	Sampling_interval	uint16 
 }
 
 type NFLOW_v5_body struct {
-	Srcaddr		int32
-	Dstaddr		int32
-	Nexthop		int32
-	Input		int16
-	Output		int16
-	DPkts		int32
-	DOctets		int32
-	First		int32
-	Last		int32
-	Srcport		int16
-	Dstport		int16
-	Pad1		int8
-	Tcp_flags	int8
-	Prot		int8
-	Tos		int8
-	Src_as  	int16
-	Dst_as  	int16
-	Src_mask 	int8 
-	Dst_mask	int8
-	Pad2		int16
+	Srcaddr		uint32
+	Dstaddr		uint32
+	Nexthop		uint32
+	Input		uint16
+	Output		uint16
+	DPkts		uint32
+	DOctets		uint32
+	First		uint32
+	Last		uint32
+	Srcport		uint16
+	Dstport		uint16
+	Pad1		uint8
+	Tcp_flags	uint8
+	Prot		uint8
+	Tos		uint8
+	Src_as  	uint16
+	Dst_as  	uint16
+	Src_mask 	uint8 
+	Dst_mask	uint8
+	Pad2		uint16
 }
 
 func construct_payload() gopacket.Payload {
@@ -94,19 +91,18 @@ func construct_payload() gopacket.Payload {
 		Src_mask:		0,
 		Dst_mask:		0,
 	}
-	encBufHeader := new(bytes.Buffer)
-	err := gob.NewEncoder(encBufHeader).Encode(header)
-	if err != nil {
-		log.Fatal(err)
-	}
 
-	encBufBody := new(bytes.Buffer)
-	err = gob.NewEncoder(encBufBody).Encode(body)
-	if err != nil {
-		log.Fatal(err)
-	}
+        buf := []byte(fmt.Sprintf("%v%v", header, body))
 
-	return gopacket.Payload(append(encBufHeader.Bytes(), encBufBody.Bytes()...))
+        fmt.Println("Header")
+//        fmt.Println(encBufHeader.Bytes())
+        fmt.Println([]byte(fmt.Sprintf("%v", header)))
+
+        fmt.Println("Body")
+//        fmt.Println(encBufBody.Bytes())
+        fmt.Println([]byte(fmt.Sprintf("%v", body)))
+
+	return gopacket.Payload(buf)
 }
 
 func main() {
@@ -127,5 +123,6 @@ func main() {
 		payload)
 //		gopacket.Payload([]byte{9, 10, 11, 12}))
 	packetData := buf.Bytes()
+        fmt.Println("Entire Packet")
         fmt.Println(packetData)
 }
