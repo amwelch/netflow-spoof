@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net"
+        "encoding/binary"
 	"code.google.com/p/gopacket/layers"
 	"code.google.com/p/gopacket"
 )
@@ -57,7 +58,9 @@ type NFLOW_v5_body struct {
 	Pad2		uint16
 }
 
-func construct_payload() gopacket.Payload {
+
+//func construct_payload() gopacket.Payload {
+func construct_payload() {
 
 	header := NFLOW_v5_header{
 		Version:		0,
@@ -70,7 +73,7 @@ func construct_payload() gopacket.Payload {
 		Engine_id:		0,
 		Sampling_interval:	0,
 	}
-	body := NFLOW_v5_body {
+/*	body := NFLOW_v5_body {
 		Srcaddr:		0,
 		Dstaddr:		0,
 		Nexthop:		0,
@@ -90,19 +93,27 @@ func construct_payload() gopacket.Payload {
 		Dst_as:			0,
 		Src_mask:		0,
 		Dst_mask:		0,
-	}
+	}*/
 
-        buf := []byte(fmt.Sprintf("%v%v", header, body))
+        NETFLOW_V5_HEADER_SIZE := 24;
+ //       NETFLOW_V5_BODY_SIZE := 48;
 
-        fmt.Println("Header")
-//        fmt.Println(encBufHeader.Bytes())
-        fmt.Println([]byte(fmt.Sprintf("%v", header)))
+	buf := gopacket.NewSerializeBuffer()
+//        payload := buf.Bytes()
+        //Allocate the space we will need for the header
+        bytes,err := buf.PrependBytes(NETFLOW_V5_HEADER_SIZE)
+	if err != nil {
+		return 
+	} 
 
-        fmt.Println("Body")
-//        fmt.Println(encBufBody.Bytes())
-        fmt.Println([]byte(fmt.Sprintf("%v", body)))
+        //Go through and add each field to the buffer
+        binary.BigEndian.PutUint16(bytes, header.Version)
+        
+        
+        fmt.Println(fmt.Sprintf("%v", bytes))
 
-	return gopacket.Payload(buf)
+	return
+//	return gopacket.Payload(buf)
 }
 
 func main() {
@@ -113,14 +124,14 @@ func main() {
 	l2 := construct_ethernet()
 	l3 := construct_ip("1.2.3.4", "5.6.7.8")
 	l4 := construct_udp()
-	payload := construct_payload()
+	construct_payload()
 
 	//LayerCake
 	gopacket.SerializeLayers(buf, opts,
 		l2, 
 		l3,
 		l4,
-		payload)
+		)
 //		gopacket.Payload([]byte{9, 10, 11, 12}))
 	packetData := buf.Bytes()
         fmt.Println("Entire Packet")
