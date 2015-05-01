@@ -73,7 +73,7 @@ func construct_payload() {
 		Engine_id:		0,
 		Sampling_interval:	0,
 	}
-/*	body := NFLOW_v5_body {
+	body := NFLOW_v5_body {
 		Srcaddr:		0,
 		Dstaddr:		0,
 		Nexthop:		0,
@@ -93,23 +93,51 @@ func construct_payload() {
 		Dst_as:			0,
 		Src_mask:		0,
 		Dst_mask:		0,
-	}*/
+	}
 
         NETFLOW_V5_HEADER_SIZE := 24;
- //       NETFLOW_V5_BODY_SIZE := 48;
+        NETFLOW_V5_BODY_SIZE := 48;
 
 	buf := gopacket.NewSerializeBuffer()
 //        payload := buf.Bytes()
         //Allocate the space we will need for the header
-        bytes,err := buf.PrependBytes(NETFLOW_V5_HEADER_SIZE)
+        bytes,err := buf.PrependBytes(NETFLOW_V5_HEADER_SIZE + NETFLOW_V5_BODY_SIZE)
 	if err != nil {
 		return 
 	} 
 
-        //Go through and add each field to the buffer
-        binary.BigEndian.PutUint16(bytes, header.Version)
+        //Go through and add each field to the Header
+        binary.BigEndian.PutUint16(bytes[:], header.Version)
+        binary.BigEndian.PutUint16(bytes[2:], header.Count)
+        binary.BigEndian.PutUint32(bytes[4:], header.Sys_uptime)
+        binary.BigEndian.PutUint32(bytes[8:], header.Unix_secs)
+        binary.BigEndian.PutUint32(bytes[12:], header.Unix_nsecs)
+        binary.BigEndian.PutUint32(bytes[16:], header.Flow_sequence)
+        bytes[20] = header.Engine_type
+        bytes[21] = header.Engine_id
+        binary.BigEndian.PutUint16(bytes[22:], header.Sampling_interval)
         
-        
+	//Add each field to the body        
+        binary.BigEndian.PutUint32(bytes[24:], body.Srcaddr)
+        binary.BigEndian.PutUint32(bytes[28:], body.Dstaddr)
+        binary.BigEndian.PutUint32(bytes[32:], body.Nexthop)
+        binary.BigEndian.PutUint16(bytes[34:], body.Input)
+        binary.BigEndian.PutUint16(bytes[36:], body.Output)
+        binary.BigEndian.PutUint32(bytes[40:], body.DPkts)
+        binary.BigEndian.PutUint32(bytes[44:], body.DOctets)
+        binary.BigEndian.PutUint32(bytes[48:], body.First)
+        binary.BigEndian.PutUint32(bytes[52:], body.Last)
+        binary.BigEndian.PutUint16(bytes[54:], body.Srcport)
+        binary.BigEndian.PutUint16(bytes[56:], body.Dstport)
+        bytes[58] = body.Pad1
+        bytes[59] = body.Tcp_flags
+        bytes[60] = body.Prot
+        bytes[61] = body.Tos
+        binary.BigEndian.PutUint16(bytes[62:], body.Src_as)
+        binary.BigEndian.PutUint16(bytes[64:], body.Dst_as)
+        bytes[66] = body.Src_mask
+        bytes[67] = body.Dst_mask
+        binary.BigEndian.PutUint16(bytes[68:], body.Pad2)
         fmt.Println(fmt.Sprintf("%v", bytes))
 
 	return
