@@ -59,8 +59,7 @@ type NFLOW_v5_body struct {
 }
 
 
-//func construct_payload() gopacket.Payload {
-func construct_payload() {
+func construct_payload() gopacket.Payload {
 
 	header := NFLOW_v5_header{
 		Version:		0,
@@ -103,7 +102,7 @@ func construct_payload() {
         //Allocate the space we will need for the header
         bytes,err := buf.PrependBytes(NETFLOW_V5_HEADER_SIZE + NETFLOW_V5_BODY_SIZE)
 	if err != nil {
-		return 
+		return nil
 	} 
 
         //Go through and add each field to the Header
@@ -138,10 +137,7 @@ func construct_payload() {
         bytes[66] = body.Src_mask
         bytes[67] = body.Dst_mask
         binary.BigEndian.PutUint16(bytes[68:], body.Pad2)
-        fmt.Println(fmt.Sprintf("%v", bytes))
-
-	return
-//	return gopacket.Payload(buf)
+	return gopacket.Payload(bytes)
 }
 
 func main() {
@@ -152,15 +148,14 @@ func main() {
 	l2 := construct_ethernet()
 	l3 := construct_ip("1.2.3.4", "5.6.7.8")
 	l4 := construct_udp()
-	construct_payload()
+	payload := construct_payload()
 
 	//LayerCake
 	gopacket.SerializeLayers(buf, opts,
 		l2, 
 		l3,
 		l4,
-		)
-//		gopacket.Payload([]byte{9, 10, 11, 12}))
+		payload)
 	packetData := buf.Bytes()
         fmt.Println("Entire Packet")
         fmt.Println(packetData)
