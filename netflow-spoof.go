@@ -8,6 +8,11 @@ import (
 	"code.google.com/p/gopacket"
 )
 
+var NETFLOW_V5_HEADER_SIZE int = 24;
+var NETFLOW_V5_RECORD_SIZE int = 48;
+var PROTOCOL_TCP uint8 = 6
+var PROTOCOL_UDP uint8 = 17
+
 func construct_ethernet() *layers.Ethernet {
 	return &layers.Ethernet{}
 }
@@ -23,7 +28,7 @@ func construct_udp() *layers.UDP {
 	return &layers.UDP{}
 }
 
-type NFLOW_v5_header struct {
+type NETFLOW_v5_header struct {
 	Version			uint16
 	Count			uint16
 	Sys_uptime		uint32
@@ -35,7 +40,7 @@ type NFLOW_v5_header struct {
 	Sampling_interval	uint16 
 }
 
-type NFLOW_v5_body struct {
+type NETFLOW_v5_record struct {
 	Srcaddr		uint32
 	Dstaddr		uint32
 	Nexthop		uint32
@@ -59,84 +64,124 @@ type NFLOW_v5_body struct {
 }
 
 
-func construct_payload() gopacket.Payload {
+func v4_to_uint32(addr net.IP) uint32 {
+	var ret uint32;
+	ret |= uint32(addr[0])
+	ret |= uint32(addr[1]) << 8
+	ret |= uint32(addr[2]) << 16
+	ret |= uint32(addr[3]) << 24
+	return ret
+}
 
-	header := NFLOW_v5_header{
-		Version:		0,
-		Count:			0,
-		Sys_uptime:		0,
-		Unix_secs:		0,
-		Unix_nsecs:		0,
-		Flow_sequence:		0,
-		Engine_type:		0,
-		Engine_id:		0,
-		Sampling_interval:	0,
+func construct_v5_header(count uint16, sampling uint16) NETFLOW_v5_header {
+	header := NETFLOW_v5_header{
+		Version:		5,		//Netflow v5
+		Count:			count,		//Number of records in this packet
+		Sys_uptime:		0,		//Ignore for now
+		Unix_secs:		0,		//Ignore for now
+		Unix_nsecs:		0,		//Ignore for now
+		Flow_sequence:		0,		//Ignore for now. Eventually want to track sequence numbers
+		Engine_type:		0,		//Ignore for now
+		Engine_id:		0,		//Ignore for now
+		Sampling_interval:	sampling,	//TODO
 	}
-	body := NFLOW_v5_body {
-		Srcaddr:		0,
-		Dstaddr:		0,
-		Nexthop:		0,
-		Input:			0,
-		Output:			0,
-		DPkts:			0,
-		DOctets:		0,
-		First:			0,
-		Last:			0,
-		Srcport:		0,
-		Dstport:		0,
+	return header
+}
+
+func insert_v5_header(header NETFLOW_v5_header, buf []byte, offset int) int {
+        binary.BigEndian.PutUint16(buf[offset:], header.Version)
+        binary.BigEndian.PutUint16(buf[offset + 2:], header.Count)
+        binary.BigEndian.PutUint32(buf[offset + 4:], header.Sys_uptime)
+        binary.BigEndian.PutUint32(buf[offset + 8:], header.Unix_secs)
+        binary.BigEndian.PutUint32(buf[offset + 12:], header.Unix_nsecs)
+        binary.BigEndian.PutUint32(buf[offset + 16:], header.Flow_sequence)
+        buf[offset + 20] = header.Engine_type
+        buf[offset + 21] = header.Engine_id
+        binary.BigEndian.PutUint16(buf[offset + 22:], header.Sampling_interval)
+
+	return NETFLOW_V5_HEADER_SIZE
+}
+
+func construct_v5_record(srcaddr string, dstaddr string, 
+	pkts uint32, l3_bytes uint32, srcport uint16, dstport uint16,
+	protocol uint8, src_as uint16, dst_as uint16) NETFLOW_v5_record {
+
+	srcip := v4_to_uint32(net.ParseIP(srcaddr))
+	dstip := v4_to_uint32(net.ParseIP(dstaddr))
+
+	record := NETFLOW_v5_record {
+		Srcaddr:		srcip,
+		Dstaddr:		dstip,
+		Nexthop:		0,				//Ignore for now
+		Input:			0,				//Do something with this later
+		Output:			0,				//^^
+		DPkts:			pkts,
+		DOctets:		l3_bytes,
+		First:			0,				//Ignore for now
+		Last:			0,				//Ignore for now
+		Srcport:		srcport,
+		Dstport:		dstport,
 		Pad1:			0,	
-		Tcp_flags:		0,
-		Prot:			0,
+		Tcp_flags:		0,				//Something with this later
+		Prot:			PROTOCOL_TCP,
 		Tos:			0,
-		Src_as:			0,
-		Dst_as:			0,
+		Src_as:			src_as,
+		Dst_as:			dst_as,
 		Src_mask:		0,
 		Dst_mask:		0,
 	}
+	return record
+}
 
-        NETFLOW_V5_HEADER_SIZE := 24;
-        NETFLOW_V5_BODY_SIZE := 48;
+func insert_v5_record(record NETFLOW_v5_record, buf []byte, offset int) int {
+        binary.BigEndian.PutUint32(buf[offset:], record.Srcaddr)
+        binary.BigEndian.PutUint32(buf[offset + 4:], record.Dstaddr)
+        binary.BigEndian.PutUint32(buf[offset + 8:], record.Nexthop)
+        binary.BigEndian.PutUint16(buf[offset + 12:], record.Input)
+        binary.BigEndian.PutUint16(buf[offset + 14:], record.Output)
+        binary.BigEndian.PutUint32(buf[offset + 16:], record.DPkts)
+        binary.BigEndian.PutUint32(buf[offset + 20:], record.DOctets)
+        binary.BigEndian.PutUint32(buf[offset + 24:], record.First)
+        binary.BigEndian.PutUint32(buf[offset + 28:], record.Last)
+        binary.BigEndian.PutUint16(buf[offset + 32:], record.Srcport)
+        binary.BigEndian.PutUint16(buf[offset + 34:], record.Dstport)
+        buf[offset + 36] = record.Pad1
+        buf[offset + 37] = record.Tcp_flags
+        buf[offset + 38] = record.Prot
+        buf[offset + 39] = record.Tos
+        binary.BigEndian.PutUint16(buf[offset + 40:], record.Src_as)
+        binary.BigEndian.PutUint16(buf[offset + 42:], record.Dst_as)
+        buf[offset + 44] = record.Src_mask
+        buf[offset + 45] = record.Dst_mask
+        binary.BigEndian.PutUint16(buf[offset + 46:], record.Pad2)
+	return NETFLOW_V5_RECORD_SIZE;
+}
+
+func construct_payload() gopacket.Payload {
+
+
+	var num_records uint16 = 5
 
 	buf := gopacket.NewSerializeBuffer()
 //        payload := buf.Bytes()
         //Allocate the space we will need for the header
-        bytes,err := buf.PrependBytes(NETFLOW_V5_HEADER_SIZE + NETFLOW_V5_BODY_SIZE)
+        bytes,err := buf.PrependBytes(NETFLOW_V5_HEADER_SIZE + NETFLOW_V5_RECORD_SIZE*int(num_records))
 	if err != nil {
 		return nil
 	} 
 
-        //Go through and add each field to the Header
-        binary.BigEndian.PutUint16(bytes[:], header.Version)
-        binary.BigEndian.PutUint16(bytes[2:], header.Count)
-        binary.BigEndian.PutUint32(bytes[4:], header.Sys_uptime)
-        binary.BigEndian.PutUint32(bytes[8:], header.Unix_secs)
-        binary.BigEndian.PutUint32(bytes[12:], header.Unix_nsecs)
-        binary.BigEndian.PutUint32(bytes[16:], header.Flow_sequence)
-        bytes[20] = header.Engine_type
-        bytes[21] = header.Engine_id
-        binary.BigEndian.PutUint16(bytes[22:], header.Sampling_interval)
+	offset := 0
+
+	header := construct_v5_header(num_records, 1000)
+	offset += insert_v5_header(header, bytes, offset)
+
+	var record NETFLOW_v5_record;
+	for i := 0; i < int(num_records); i++ {
+		record = construct_v5_record("1.1.1.1", "2.2.2.2", 5, 256, 80, 5050, 6, 237, 237)
+		insert_v5_record(record, bytes, offset)
+		
+	}
         
-	//Add each field to the body        
-        binary.BigEndian.PutUint32(bytes[24:], body.Srcaddr)
-        binary.BigEndian.PutUint32(bytes[28:], body.Dstaddr)
-        binary.BigEndian.PutUint32(bytes[32:], body.Nexthop)
-        binary.BigEndian.PutUint16(bytes[34:], body.Input)
-        binary.BigEndian.PutUint16(bytes[36:], body.Output)
-        binary.BigEndian.PutUint32(bytes[40:], body.DPkts)
-        binary.BigEndian.PutUint32(bytes[44:], body.DOctets)
-        binary.BigEndian.PutUint32(bytes[48:], body.First)
-        binary.BigEndian.PutUint32(bytes[52:], body.Last)
-        binary.BigEndian.PutUint16(bytes[54:], body.Srcport)
-        binary.BigEndian.PutUint16(bytes[56:], body.Dstport)
-        bytes[58] = body.Pad1
-        bytes[59] = body.Tcp_flags
-        bytes[60] = body.Prot
-        bytes[61] = body.Tos
-        binary.BigEndian.PutUint16(bytes[62:], body.Src_as)
-        binary.BigEndian.PutUint16(bytes[64:], body.Dst_as)
-        bytes[66] = body.Src_mask
-        bytes[67] = body.Dst_mask
-        binary.BigEndian.PutUint16(bytes[68:], body.Pad2)
 	return gopacket.Payload(bytes)
 }
 
