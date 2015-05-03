@@ -192,6 +192,17 @@ func chk(err error){
 	}
 }
 
+func init_connection(addr net.IP) *net.UDPConn {
+	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: addr, Port: 0})
+	chk(err)
+	return conn
+}
+
+func send_packet(conn *net.UDPConn, addr net.IP, port int, pkt []byte) {
+	_, err := conn.WriteToUDP(pkt, &net.UDPAddr{IP: addr, Port: port})
+	chk(err)
+}
+
 func main() {
 
 	buf := gopacket.NewSerializeBuffer()
@@ -212,10 +223,8 @@ func main() {
         fmt.Println("Entire Packet")
         fmt.Println(packetData)
 
-	ipv4loopback := net.IP{127, 0, 0, 1}
 	//Send the packet to lo
-	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: ipv4loopback, Port: 0})
-	chk(err)
-	_, err = conn.WriteToUDP(packetData, &net.UDPAddr{IP: ipv4loopback, Port: NETFLOW_PORT})
-	chk(err)
+	ipv4loopback := net.IP{127, 0, 0, 1}
+	conn := init_connection(ipv4loopback)
+	send_packet(conn, ipv4loopback, NETFLOW_PORT, packetData)
 }
