@@ -12,6 +12,7 @@ var NETFLOW_V5_HEADER_SIZE int = 24;
 var NETFLOW_V5_RECORD_SIZE int = 48;
 var PROTOCOL_TCP uint8 = 6
 var PROTOCOL_UDP uint8 = 17
+var NETFLOW_PORT int = 2055
 
 func construct_ethernet() *layers.Ethernet {
 	return &layers.Ethernet{}
@@ -185,6 +186,12 @@ func construct_payload() gopacket.Payload {
 	return gopacket.Payload(bytes)
 }
 
+func chk(err error){
+	if err != nil {
+		panic(err)
+	}
+}
+
 func main() {
 
 	buf := gopacket.NewSerializeBuffer()
@@ -204,4 +211,11 @@ func main() {
 	packetData := buf.Bytes()
         fmt.Println("Entire Packet")
         fmt.Println(packetData)
+
+	ipv4loopback := net.IP{127, 0, 0, 1}
+	//Send the packet to lo
+	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: ipv4loopback, Port: 0})
+	chk(err)
+	_, err = conn.WriteToUDP(packetData, &net.UDPAddr{IP: ipv4loopback, Port: NETFLOW_PORT})
+	chk(err)
 }
