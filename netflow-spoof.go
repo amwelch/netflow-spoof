@@ -3,9 +3,10 @@ package main
 import (
 	"fmt"
 	"net"
-        "encoding/binary"
+	"encoding/binary"
 	"code.google.com/p/gopacket/layers"
 	"code.google.com/p/gopacket"
+	"flag"
 )
 
 var NETFLOW_V5_HEADER_SIZE int = 24;
@@ -203,7 +204,14 @@ func send_packet(conn *net.UDPConn, addr net.IP, port int, pkt []byte) {
 	chk(err)
 }
 
+
 func main() {
+
+	dst_ip := flag.String("dst", "127.0.0.1", "Destination IP to send the spoofed netflow")
+	dst_port := flag.Int("port", NETFLOW_PORT, "Destination Port to send the spoofed netflow")
+  flag.Parse()
+
+	dst_addr := net.ParseIP(*dst_ip)
 
 	buf := gopacket.NewSerializeBuffer()
 	opts := gopacket.SerializeOptions{}
@@ -220,11 +228,9 @@ func main() {
 		l4,
 		payload)
 	packetData := buf.Bytes()
-        fmt.Println("Entire Packet")
-        fmt.Println(packetData)
 
 	//Send the packet to lo
-	ipv4loopback := net.IP{127, 0, 0, 1}
-	conn := init_connection(ipv4loopback)
-	send_packet(conn, ipv4loopback, NETFLOW_PORT, packetData)
+	conn := init_connection(dst_addr)
+	send_packet(conn, dst_addr, *dst_port, packetData)
+	fmt.Println(packetData)
 }
