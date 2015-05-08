@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net"
+  "time"
 	"encoding/binary"
 	"code.google.com/p/gopacket/layers"
 	"code.google.com/p/gopacket"
@@ -14,6 +15,7 @@ var NETFLOW_V5_RECORD_SIZE int = 48;
 var PROTOCOL_TCP uint8 = 6
 var PROTOCOL_UDP uint8 = 17
 var NETFLOW_PORT int = 2055
+var NANOSECOND int64 = 1000000000
 
 func construct_ethernet() *layers.Ethernet {
 	return &layers.Ethernet{}
@@ -159,10 +161,7 @@ func insert_v5_record(record NETFLOW_v5_record, buf []byte, offset int) int {
 	return NETFLOW_V5_RECORD_SIZE;
 }
 
-func construct_payload() gopacket.Payload {
-
-
-	var num_records uint16 = 5
+func construct_payload(num_records uint16) gopacket.Payload {
 
 	buf := gopacket.NewSerializeBuffer()
 //        payload := buf.Bytes()
@@ -209,6 +208,9 @@ func main() {
 
 	dst_ip := flag.String("dst", "127.0.0.1", "Destination IP to send the spoofed netflow")
 	dst_port := flag.Int("port", NETFLOW_PORT, "Destination Port to send the spoofed netflow")
+	rate := flag.Int("rate", 1, "Rate in MB/s")
+  runtime := flag.Int64("time", 10, "Time in seconds to send packets")
+  flows_per_packet := flag.Uint("fpp", 1, "flows per packet, max of 30")
   flag.Parse()
 
 	dst_addr := net.ParseIP(*dst_ip)
@@ -219,18 +221,36 @@ func main() {
 	l2 := construct_ethernet()
 	l3 := construct_ip("1.2.3.4", "5.6.7.8")
 	l4 := construct_udp()
-	payload := construct_payload()
 
-	//LayerCake
-	gopacket.SerializeLayers(buf, opts,
-		l2, 
-		l3,
-		l4,
-		payload)
-	packetData := buf.Bytes()
+  start := time.Now().Unix()
+  var last_loop int64
+  var count int
+  var cur_packet int64
+  var wait int64   
 
-	//Send the packet to lo
-	conn := init_connection(dst_addr)
-	send_packet(conn, dst_addr, *dst_port, packetData)
-	fmt.Println(packetData)
+  for last_loop - start < (*runtime)*NANOSECOND {
+    count = 0
+    cur_packet = time.Now().Unix()
+    for count < *rate {
+			payload := construct_payload(uint16(*flows_per_packet))
+			//LayerCake
+			gopacket.SerializeLayers(buf, opts,
+				l2, 
+				l3,
+				l4,
+				payload)
+			packetData := buf.Bytes()
+      
+			//Send the packet to lo
+			conn := init_connection(dst_addr)
+			send_packet(conn, dst_addr, *dst_port, packetData)
+      count++
+      wait = 1*NANOSECOND - (time.Now().Unix() - cur_packet)
+      if wait > 0 {
+      	time.Sleep(time.Duration(wait))
+      }
+    }
+    last_loop = time.Now().Unix()
+	}
+	fmt.Println("fin")
 }
