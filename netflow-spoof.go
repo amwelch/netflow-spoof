@@ -263,7 +263,9 @@ func main() {
   
 	//Send the packet to lo
 	conn := init_connection(dst_addr)
-	send_packet(conn, dst_addr, *dst_port, packetData)
+
+  //Debug timing
+  t0 := time.Now()
 
   //Simple way for now. Token based approach later
   throttle := time.Tick(time.Duration(*rate)*time.Second)
@@ -271,5 +273,8 @@ func main() {
     <-throttle
     go send_packet(conn, dst_addr, *dst_port, packetData)
   }
+
+  t1 := time.Now()
+  Trace.Printf("Sent %v packets in %vs\n", (*rate)*(*runtime), t1.Sub(t0))
 	Info.Println("fin")
 }
