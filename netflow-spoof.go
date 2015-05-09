@@ -1,21 +1,28 @@
 package main
 
 import (
-	"fmt"
 	"net"
+  "io"
   "time"
+  "log"
+  "os"
 	"encoding/binary"
 	"code.google.com/p/gopacket/layers"
 	"code.google.com/p/gopacket"
 	"flag"
 )
-
-var NETFLOW_V5_HEADER_SIZE int = 24;
-var NETFLOW_V5_RECORD_SIZE int = 48;
-var PROTOCOL_TCP uint8 = 6
-var PROTOCOL_UDP uint8 = 17
-var NETFLOW_PORT int = 2055
-var NANOSECOND int64 = 1000000000
+var (
+  NETFLOW_V5_HEADER_SIZE int = 24;
+  NETFLOW_V5_RECORD_SIZE int = 48;
+  PROTOCOL_TCP uint8 = 6
+  PROTOCOL_UDP uint8 = 17
+  NETFLOW_PORT int = 2055
+  NANOSECOND int64 = 1000000000
+  Trace *log.Logger
+  Info *log.Logger
+  Warning *log.Logger
+  Error *log.Logger
+)
 
 func construct_ethernet() *layers.Ethernet {
 	return &layers.Ethernet{}
@@ -204,7 +211,30 @@ func send_packet(conn *net.UDPConn, addr net.IP, port int, pkt []byte) {
 }
 
 
+func Init (
+  traceHandle io.Writer,
+  infoHandle io.Writer,
+  warningHandle io.Writer,
+  errorHandle io.Writer) {
+
+  Trace = log.New(traceHandle, "TRACE: ", 
+    log.Ldate|log.Ltime|log.Lshortfile)
+
+  Info = log.New(infoHandle,
+    "INFO: ",
+    log.Ldate|log.Ltime|log.Lshortfile)
+
+  Warning = log.New(warningHandle,
+    "WARNING: ",
+    log.Ldate|log.Ltime|log.Lshortfile)
+
+  Error = log.New(errorHandle,
+    "ERROR: ",
+    log.Ldate|log.Ltime|log.Lshortfile)
+}
+
 func main() {
+  Init(os.Stdout, os.Stdout, os.Stdout, os.Stderr)
 
 	dst_ip := flag.String("dst", "127.0.0.1", "Destination IP to send the spoofed netflow")
 	dst_port := flag.Int("port", NETFLOW_PORT, "Destination Port to send the spoofed netflow")
@@ -241,5 +271,5 @@ func main() {
     <-throttle
     go send_packet(conn, dst_addr, *dst_port, packetData)
   }
-	fmt.Println("fin")
+	Info.Println("fin")
 }
