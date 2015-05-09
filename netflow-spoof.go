@@ -268,7 +268,7 @@ func main() {
   t0 := time.Now()
 
   //Simple way for now. Token based approach later
-  throttle := time.Tick(time.Duration(*rate)*time.Second)
+  throttle := time.Tick(1e9 / time.Duration(*rate))
   for i := 0; int64(i) < (*rate)*(*runtime); i++ {
     <-throttle
     go send_packet(conn, dst_addr, *dst_port, packetData)
